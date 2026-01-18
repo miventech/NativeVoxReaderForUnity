@@ -38,7 +38,12 @@ Mantén MagicaVoxel abierto, guarda tus cambios y observa cómo Unity actualiza 
 
 ## Empezando
 
-1.  **Instalación**: Copia la carpeta `NativeUnityVoxReader` en tu directorio `Assets`.
+1.  **Instalación**:
+    - **Opción A (Package Manager - Recomendado)**: 
+        1. En Unity, ve a `Window` > `Package Manager`.
+        2. Haz clic en el botón `+` y selecciona `Add package from git URL...`.
+        3. Pega: `https://github.com/miventech/NativeUnityVoxReader.git`
+    - **Opción B (Manual)**: Copia la carpeta `NativeUnityVoxReader` en tu directorio `Assets`.
 2.  **Uso**: 
     - **Automático**: Simplemente arrastra un archivo `.vox` a tu Proyecto.
     - **Tiempo de Ejecución**: Usa el componente `VoxReader` o `ReaderVoxFile.Read()` mediante script.
