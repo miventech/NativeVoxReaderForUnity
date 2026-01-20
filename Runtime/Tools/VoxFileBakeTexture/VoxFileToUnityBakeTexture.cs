@@ -8,8 +8,6 @@ namespace Miventech.NativeUnityVoxReader.Tools.VoxFileBakeTexture
 {
     public static class VoxFileToUnityBakeTexture
     {
-         
-
 
         public static VoxModelResult[] Convert(VoxFile FileData, Color32[] palette, VoxFileToUnityBakeTextureSetting settings = default)
         {
@@ -144,17 +142,24 @@ namespace Miventech.NativeUnityVoxReader.Tools.VoxFileBakeTexture
                     volume[v.x, v.y, v.z] = v.colorIndex;
             }
 
+            //prepare arrays ( @stonstad suggestion of reducing allocations)
+            int[] x = new int[3];
+            int[] q = new int[3];
+            int maxDim = Mathf.Max(size.x, Mathf.Max(size.y, size.z));
+            int[] mask = new int[maxDim * maxDim];
+            int[] voxelPos = new int[3];
+            int[] pos = new int[3];
+            
             for (int d = 0; d < 3; d++)
             {
                 int u = (d + 1) % 3;
                 int v = (d + 2) % 3;
-                int[] x = new int[3];
-                int[] q = new int[3];
+                q[0] = 0; q[1] = 0; q[2] = 0; 
                 q[d] = 1;
 
                 for (int faceDir = -1; faceDir <= 1; faceDir += 2)
                 {
-                    int[] mask = new int[size[u] * size[v]];
+                    System.Array.Clear(mask, 0, mask.Length);
 
                     for (x[d] = 0; x[d] < size[d]; x[d]++)
                     {
@@ -215,7 +220,6 @@ namespace Miventech.NativeUnityVoxReader.Tools.VoxFileBakeTexture
                                         height++;
                                     }
 
-                                    int[] pos = new int[3];
                                     pos[u] = i; 
                                     pos[v] = j; 
                                     pos[d] = x[d];
@@ -228,7 +232,6 @@ namespace Miventech.NativeUnityVoxReader.Tools.VoxFileBakeTexture
                                     {
                                         for (int lx = 0; lx < width; lx++)
                                         {
-                                            int[] voxelPos = new int[3];
                                             voxelPos[u] = pos[u] + lx;
                                             voxelPos[v] = pos[v] + ly;
                                             voxelPos[d] = pos[d];
@@ -236,24 +239,45 @@ namespace Miventech.NativeUnityVoxReader.Tools.VoxFileBakeTexture
                                             // Get color index from volume
                                             int colorIdx = volume[voxelPos[0], voxelPos[1], voxelPos[2]];
                                             
-                                            // Convert to Color32
-                                            Color32 colorPixel = Color.magenta;
-                                            if (colorIdx - 1 < palette.Length && colorIdx - 1 >= 0) 
-                                                colorPixel = palette[colorIdx - 1];
-                                                
+
+                                            //------------ Commented out old code innecesary creation variable -----------
+                                            // // Convert to Color32
+                                            // Color32 colorPixel = Color.magenta;
+                                            // if (colorIdx - 1 < palette.Length && colorIdx - 1 >= 0) 
+                                            //     colorPixel = palette[colorIdx - 1];
                                             
-                                            quadColors[lx + ly * width] = colorPixel;
-                                            
-                                            
+                                            // quadColors[lx + ly * width] = colorPixel;
+
+
+
+                                            // Assign color from palette or magenta if out of range
+                                            if (colorIdx > 0 && colorIdx <= palette.Length) 
+                                                quadColors[lx + ly * width] = palette[colorIdx - 1];
+                                            else 
+                                                quadColors[lx + ly * width] = (Color32)Color.magenta;
+
+
                                             mask[(j + ly) * size[u] + (i + lx)] = 0;
                                         }
                                     }
 
+                                    int px = pos[0];
+                                    int py = pos[1];
+                                    int pz = pos[2];
+
+                                    /* removed unnecessary array usage
                                     int[] visualPos = new int[] { pos[0], pos[1], pos[2] };
                                     int depthOffset = (faceDir == 1) ? 1 : 0;
                                     visualPos[d] += depthOffset;
+                                    */
+                                    if (faceDir == 1)
+                                    {
+                                        if (d == 0) px++;
+                                        else if (d == 1) py++;
+                                        else pz++;
+                                    }
 
-                                    AddQuadInfo(visualPos, u, v, d, width, height, faceDir, quadColors, quads);
+                                    AddQuadInfo(px, py, pz, u, v, d, width, height, faceDir, quadColors, quads);
 
                                     
                                     int skip = width - 1;
@@ -267,34 +291,28 @@ namespace Miventech.NativeUnityVoxReader.Tools.VoxFileBakeTexture
                 }
             }
         }
-
-        private static void AddQuadInfo(int[] pos, int axisU, int axisV, int axisD, int width, int height, int faceDir, Color32[] colors, List<QuadInfo> quads, VoxFileToUnityBakeTextureSetting settings = default)
+        private static void AddQuadInfo(int px, int py, int pz, int axisU, int axisV, int axisD, int width, int height, int faceDir, Color32[] colors, List<QuadInfo> quads, VoxFileToUnityBakeTextureSetting settings = default)
         {
-            QuadInfo q = new QuadInfo();
-            q.colors = colors;
-            q.width = width;
-            q.height = height;
-            q.faceDir = faceDir;
+            
+            QuadInfo q = new QuadInfo { colors = colors, width = width, height = height, faceDir = faceDir };
+            // Usar variables locales en lugar de arrays int[]
+            float v0x = px, v0y = py, v0z = pz;
+            float v1x = px, v1y = py, v1z = pz;
+            float v2x = px, v2y = py, v2z = pz;
+            float v3x = px, v3y = py, v3z = pz;
+            // Calculate other vertices based on axisU and axisV - Use epsilon to avoid shadow acne
+            if (axisU == 0) { v1x += width; v3x += width ; }
+            else if (axisU == 1) { v1y += width; v3y += width; }
+            else { v1z += width; v3z += width; }
 
-            // Calculate vertices in Unity World Space
-            // v0: 0,0
-            int[] p0 = new int[]{ pos[0], pos[1], pos[2] };
-            // v1: w,0
-            int[] p1 = new int[]{ pos[0], pos[1], pos[2] };
-            p1[axisU] += width;
-            // v2: 0,h
-            int[] p2 = new int[]{ pos[0], pos[1], pos[2] };
-            p2[axisV] += height;
-            // v3: w,h
-            int[] p3 = new int[]{ pos[0], pos[1], pos[2] };
-            p3[axisU] += width;
-            p3[axisV] += height;
-
+            if (axisV == 0) { v2x += height; v3x += height; }
+            else if (axisV == 1) { v2y += height; v3y += height; }
+            else { v2z += height; v3z += height; }
             // Vox(x,y,z) -> Unity(x,z,y)
-            q.v0 = new Vector3(p0[0], p0[2], p0[1]);
-            q.v1 = new Vector3(p1[0], p1[2], p1[1]);
-            q.v2 = new Vector3(p2[0], p2[2], p2[1]);
-            q.v3 = new Vector3(p3[0], p3[2], p3[1]);
+            q.v0 = new Vector3(v0x, v0z, v0y);
+            q.v1 = new Vector3(v1x, v1z, v1y);
+            q.v2 = new Vector3(v2x, v2z, v2y);
+            q.v3 = new Vector3(v3x, v3z, v3y);
 
             quads.Add(q);
         }
@@ -345,33 +363,7 @@ namespace Miventech.NativeUnityVoxReader.Tools.VoxFileBakeTexture
             }
         }
         
-        // Remove unused method
-        /* private void AddCubeOptimized... */
-        
-        private static void AddFace(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 v3, Color32 color, List<Vector3> verts, List<int> tris, List<Color32> cols)
-        {
-            int baseIndex = verts.Count;
-
-            verts.Add(v0);
-            verts.Add(v1);
-            verts.Add(v2);
-            verts.Add(v3);
-
-            cols.Add(color);
-            cols.Add(color);
-            cols.Add(color);
-            cols.Add(color);
-
-            // First triangle
-            tris.Add(baseIndex);
-            tris.Add(baseIndex + 1);
-            tris.Add(baseIndex + 2);
-
-            // Second triangle
-            tris.Add(baseIndex);
-            tris.Add(baseIndex + 2);
-            tris.Add(baseIndex + 3);
-        }
+       
         
     }
 }

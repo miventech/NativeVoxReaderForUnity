@@ -1,0 +1,13 @@
+fileFormatVersion: 2
+guid: 24fcfffd232eed64ba2e6a21885e848f
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: 77620e5fd589e7a469e4034dfb28b251, type: 3}
+  maxAtlasSize: 4096
+  maxQuadSize: 64
+  scale: 0.1
