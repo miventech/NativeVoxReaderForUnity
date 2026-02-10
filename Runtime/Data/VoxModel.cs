@@ -10,7 +10,7 @@ namespace Miventech.NativeVoxReader.Data
         public Vector3Int position; // Model position in the world
         public Voxel[] voxels;  // List of voxels it contains
         public bool UsePaletteCustom;
-        public Color32[] CustomPalette;
+        public AdvanceColor[] CustomPalette;
         public VoxModel()
         {
             size = Vector3Int.zero;
@@ -27,10 +27,10 @@ namespace Miventech.NativeVoxReader.Data
             if (usePaletteCustom)
             {
                 UsePaletteCustom = true;
-                CustomPalette = new Color32[256];
+                CustomPalette = new AdvanceColor[256];
                 for (int i = 0; i < 256; i++)
                 {
-                    CustomPalette[i] = Color.white; // Placeholder, should be set to actual colors
+                    CustomPalette[i] = new Color(255,255,255,255); // Placeholder, should be set to actual colors
                 }
             }
         }

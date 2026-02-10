@@ -25,8 +25,13 @@ namespace Miventech.NativeVoxReader.Tools.VoxFileBakeTexture
 
 
             VoxModelResult result = new VoxModelResult(null,null,null);
-             // 1. Generate local geometry
+            // 1. Generate local geometry
             List<QuadInfo> quads = new List<QuadInfo>();
+            //XD ready custom palette
+            if (model.UsePaletteCustom)
+            {
+                palette = model.CustomPalette.ToColor32Array();
+            }
             GenerateGreedyQuads(model, palette, quads, settings);
 
             if (quads.Count == 0) return null;

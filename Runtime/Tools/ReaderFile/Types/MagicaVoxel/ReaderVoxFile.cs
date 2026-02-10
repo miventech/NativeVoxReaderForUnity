@@ -262,10 +262,10 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
             }
         }
 
-        private static Color32[] GetDefaultPalette()
+        private static AdvanceColor[] GetDefaultPalette()
         {
             // MagicaVoxel default palette fallback
-            Color32[] palette = new Color32[256];
+            AdvanceColor[] palette = new AdvanceColor[256];
             for (int i = 0; i < 256; i++)
             {
                 uint color = DefaultPalette[i];
@@ -273,7 +273,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                 byte g = (byte)((color >> 8) & 0xFF);
                 byte b = (byte)((color >> 16) & 0xFF);
                 byte a = (byte)((color >> 24) & 0xFF);
-                palette[i] = new Color32(r, g, b, 255); // Default Alpha 255
+                palette[i] = new AdvanceColor(new Color32(r, g, b, 255), 0, 0, null); // Default Alpha 255
             }
             return palette;
         }

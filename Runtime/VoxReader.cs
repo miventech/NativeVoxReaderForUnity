@@ -63,7 +63,7 @@ namespace Miventech.NativeVoxReader
 
             foreach (VoxModel voxModel in loadedVoxFile.models)
             {
-                meshBuilder.BuildObject(voxModel, loadedVoxFile.palette);
+                meshBuilder.BuildObject(voxModel, loadedVoxFile.palette.ToColor32Array());
             }
         }
         

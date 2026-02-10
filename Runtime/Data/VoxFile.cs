@@ -9,7 +9,7 @@ namespace Miventech.NativeVoxReader.Data
     {
         public int version;
         public List<VoxModel> models = new List<VoxModel>();
-        public Color32[] palette = new Color32[256]; // MagicaVoxel uses a 256-color palette
+        public AdvanceColor[] palette = new AdvanceColor[256]; // MagicaVoxel uses a 256-color palette
 
         public VoxFile()
         {

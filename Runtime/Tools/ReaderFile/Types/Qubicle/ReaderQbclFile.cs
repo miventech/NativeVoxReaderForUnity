@@ -88,7 +88,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
 
             // Finalize Palette
             for (int i = palette.Count; i < 256; i++) palette.Add(new Color32(0, 0, 0, 0));
-            voxFile.palette = palette.ToArray();
+            voxFile.palette = palette.ToArray().ToAdvanceColorArray();
 
             return voxFile;
         }
@@ -240,7 +240,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
             }
 
             for (int i = palette.Count; i < 256; i++) palette.Add(new Color32(0, 0, 0, 0));
-            voxFile.palette = palette.ToArray();
+            voxFile.palette = palette.ToArray().ToAdvanceColorArray();
 
             return voxFile;
         }

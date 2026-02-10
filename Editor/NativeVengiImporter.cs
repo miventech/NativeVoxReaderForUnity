@@ -15,26 +15,26 @@ namespace Miventech.NativeVoxReader.Editor
     /// Custom importer to handle .vox files as native 3D assets in Unity.
     /// This allows dragging .vox files directly into the scene or using them as prefabs.
     /// </summary>
-    [ScriptedImporter(1, "vox")]
-    public class NativeVoxImporter : ScriptedImporter
+    [ScriptedImporter(1, "vengi")]
+    public class NativeVengiImporter : ScriptedImporter
     {
         public int maxAtlasSize = 4096;
         public int maxQuadSize = 64;
         public float scale = 0.1f;
         public override void OnImportAsset(AssetImportContext ctx)
         {
-            // 1. Read the .vox file data
-            VoxFile loadedVoxFile =new ReaderVoxFile().Read(ctx.assetPath);
+            // 1. Read the .vengi file data
+            VoxFile loadedVoxFile =new ReaderVengiFile().Read(ctx.assetPath);
             if (loadedVoxFile == null)
             {
-                Debug.LogError($"VoxImporter: Failed to read vox file at {ctx.assetPath}");
+                Debug.LogError($"VengiImporter: Failed to read vengi file at {ctx.assetPath}");
                 return;
             }
 
             // 2. Create the root GameObject for the asset
             GameObject root = new GameObject(Path.GetFileNameWithoutExtension(ctx.assetPath));
 
-            // 3. Convert VOX data to Unity Meshes and Materials using the existing baking logic
+            // 3. Convert VENGI data to Unity Meshes and Materials using the existing baking logic
             VoxFileToUnityBakeTextureSetting settings = new VoxFileToUnityBakeTextureSetting()
             {
                 maxAtlasSize = maxAtlasSize,

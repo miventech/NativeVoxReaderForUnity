@@ -17,6 +17,10 @@ namespace Miventech.NativeVoxReader.Abstract
         /// <param name="palette">The color palette to use for voxels.</param>
         /// <returns>A Unity Mesh representing the voxel model.</returns>
         public abstract void BuildObject(VoxModel model, Color32[] palette);
+       
+        
+        
+        
     }
 }
 

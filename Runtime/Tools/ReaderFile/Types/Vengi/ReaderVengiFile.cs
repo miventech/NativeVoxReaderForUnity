@@ -10,6 +10,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
 {
     public class ReaderVengiFile : BaseReaderFile
     {
+        public AdvanceColor[] TempPalette { get; private set; }
         public override bool IsValidFile(string path)
         {
             string extension = Path.GetExtension(path).ToLower();
@@ -18,10 +19,11 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
 
         public override VoxFile Read(string path)
         {
+            TempPalette = null;
             Debug.Log("Reading VENGI file: " + path);
             VoxFile voxFile = new VoxFile();
             voxFile.models = new List<VoxModel>();
-
+            TempPalette = null;
             // Initialize default palette (MagicaVoxel fallback) just in case PALC is missing
             for (int i = 0; i < 256; i++)
             {
@@ -106,7 +108,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                     return true;
                 case "PALC":
                     // PALC can appear at root level in some versions or files
-                    ReadPalette(reader, voxFile, version);
+                    voxFile.palette = ReadPalette(reader, voxFile, version);
                     return true;
                 default:
                     return false;
@@ -159,18 +161,19 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                 }
 
                 bool handled = false;
+                
                 switch (chunkMagic)
                 {
                     case "NODE":
                         ReadNode(reader, voxFile, version, currentOffset);
                         handled = true;
                         break;
-                    case "DATA":
+                    case "DATA": // Main voxel data chunk for this node voxels, position,
                         ReadNodeData(reader, voxFile, version, currentOffset);
                         handled = true;
                         break;
                     case "PALC":
-                        ReadPalette(reader, voxFile, version);
+                        TempPalette = ReadPalette(reader, voxFile, version);
                         handled = true;
                         break;
                     case "PROP":
@@ -227,8 +230,15 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
 
             VoxModel model = new VoxModel();
             model.size = new Vector3Int(sizeX, sizeY, sizeZ);
-            model.position = offset + new Vector3Int(minX, minY, minZ);
+            Vector3Int modelPosition = offset + new Vector3Int(minX, minZ, minY); // Swap Y and Z for Unity's coordinate system
+            model.position = new Vector3Int(modelPosition.x, modelPosition.z, modelPosition.y);
 
+            if (TempPalette != null)
+            {
+                model.UsePaletteCustom = true;
+                model.CustomPalette = TempPalette;
+            }
+            
             List<Voxel> voxels = new List<Voxel>();
 
             for (int x = minX; x <= maxX; x++)
@@ -242,7 +252,6 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                         {
                             byte color = 0;
                             // byte normal = 0;
-
                             if (version >= 4)
                             {
                                 color = reader.ReadByte();
@@ -262,7 +271,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                                localY >= 0 && localY < 256 &&
                                localZ >= 0 && localZ < 256)
                             {
-                                voxels.Add(new Voxel((byte)localX, (byte)localY, (byte)localZ, color));
+                                voxels.Add(new Voxel((byte)localX, (byte)localZ,(byte)localY, (byte)(color + 1)));
                             }
                         }
                     }
@@ -271,15 +280,16 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
 
             model.voxels = voxels.ToArray();
             voxFile.models.Add(model);
+            TempPalette = null; // Clear temp palette after applying to model, as it should only apply to the next model if present
         }
 
-        private void ReadPalette(BinaryReader reader, VoxFile voxFile, uint version)
+        private AdvanceColor[] ReadPalette(BinaryReader reader, VoxFile voxFile, uint version)
         {
             ReadPascalString(reader); // Palette Name
             int count = reader.ReadInt32();
 
             Debug.Log($"Reading PALC with {count} colors. Version: {version}");
-
+            AdvanceColor[] palette = new AdvanceColor[255];
             // 1. Colors
             for (int i = 0; i < count; i++)
             {
@@ -291,8 +301,8 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                 // Keep alpha 255 for opaque rendering in Unity
                 if (i < 256)
                 {
-                    voxFile.palette[i] = new Color32(r, g, b, a);
-                    Debug.Log("Read color " + i + ": " + voxFile.palette[i] + $" (raw RGBA: {r},{g},{b},{a})");
+                    palette[i] = new Color32(r, g, b, a);
+                    Debug.Log("Read color " + i + ": " + palette[i] + $" (raw RGBA: {r},{g},{b},{a})");
                 }
             }
 
@@ -307,13 +317,13 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
 
             for (int i = 0; i < count; i++)
             {
-                reader.ReadByte();
+                palette[i].ColorIndex = reader.ReadByte();;
             }
 
             // 4: Read Names Materials
             for (int i = 0; i < count; i++)
             {
-                ReadPascalString(reader); // Color Names (Strings) - Unverified structure, may not be present in all versions or files
+                palette[i].Name = ReadPascalString(reader); // Color Names (Strings) - Unverified structure, may not be present in all versions or files
             }
 
 
@@ -324,16 +334,17 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
             //6: Read Material Types and Properties - Unverified structure, may not be present in all versions or files
             for (int i = 0; i < count; i++)
             {
-                int MaterialType = reader.ReadInt32(); // Material Type (0=none, 1=diffuse, 2=metal, 3=glass, etc.)
+                palette[i].MaterialType = reader.ReadInt32(); // Material Type (0=none, 1=diffuse, 2=metal, 3=glass, etc.)
                 ushort MaterialMax = reader.ReadByte();
                 for(ushort j = 0; j < MaterialMax; j++)
                 {
                     string PropertyName = ReadPascalString(reader);
                     float PropertyValue = reader.ReadSingle();
-                    Debug.Log($"Material (type: {MaterialType}) {i} Property: {PropertyName} : {PropertyValue}");
+                    palette[i].properties.Add(PropertyName, PropertyValue);
+                    Debug.Log($"Material (type: {palette[i].MaterialType}) {i} Property: {PropertyName} : {PropertyValue}");
                 }
             }
-        
+            return palette;
         }
 
         private void ReadProperties(BinaryReader reader)
@@ -341,8 +352,9 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
             int count = reader.ReadInt32();
             for (int i = 0; i < count; i++)
             {
-                ReadPascalString(reader); // key
-                ReadPascalString(reader); // value
+                string NameProp = ReadPascalString(reader); // key
+                string valueProp = ReadPascalString(reader); // value
+                Debug.Log($"Node Property: {NameProp} : {valueProp}");
             }
         }
 
@@ -388,7 +400,10 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                 }
             }
         }
-
+        /// <summary>
+        /// IK Constraints chunk, unverified structure based on limited documentation and examples. May not be fully correct or supported in all versions/files. Contains IK effector data and swing limits for animation rigs. Not currently used in Unity importer but read to maintain file integrity during parsing.
+        /// </summary>
+        /// <param name="reader"></param>
         private void ReadIkco(BinaryReader reader)
         {
             reader.ReadInt32(); // effectorNodeId
