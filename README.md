@@ -27,12 +27,21 @@ Keep MagicaVoxel open, save your changes, and watch Unity update your models ins
 
 ##  Key Features
 
-*   **📦 Plug & Play**: Drag `.vox` files directly into your scene. Unity treats them like prefabs.
+*   **📦 Plug & Play**: Drag `.vox` or `.vengi` files directly into your scene. Unity treats them like prefabs.
 *   **🌳 Scene Awareness**: Fully supports MagicaVoxel hierarchies (Groups and Transformations).
 *   **📐 High Optimization**: Advanced **Greedy Meshing** reduces poly count by up to 90% compared to cube-based methods.
 *   **🎨 Texture Baking**: Bakes all voxel colors into a single atlas to keep your draw calls at a minimum.
 *   **🛠 Inspector Controls**: Adjust scale, atlas size, and mesh density directly on the asset importer.
 *   **🧩 Minimalist & Clean**: Zero external dependencies and includes Assembly Definitions for optimal compile times.
+*   **🔄 Vengi Support**: Now includes support for reading and importing data from Vengi.
+
+---
+
+## 🚀 Upcoming Features (Roadmap)
+
+*   **🎬 Animation System**: We are currently developing a native voxel animation system to bring your characters to life directly within the tool.
+*   **⚡ Further Optimization**: Continued performance improvements for large scale scenes.
+*   **🛠 Advanced Editing Tools**: More integrated tools for voxel manipulation within the Unity Editor.
 
 ---
 

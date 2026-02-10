@@ -27,12 +27,21 @@ Mantén MagicaVoxel abierto, guarda tus cambios y observa cómo Unity actualiza 
 
 ## Características Principales
 
-*   **📦 Plug & Play**: Arrastra archivos `.vox` directamente a tu escena. Unity los trata como prefabs.
+*   **📦 Plug & Play**: Arrastra archivos `.vox` o `.vengi` directamente a tu escena. Unity los trata como prefabs.
 *   **🌳 Jerarquía de Escena**: Soporta totalmente las jerarquías de MagicaVoxel (Grupos y Transformaciones).
 *   **📐 Alta Optimización**: El algoritmo avanzado de **Greedy Meshing** reduce el conteo de polígonos hasta en un 90% en comparación con métodos basados en cubos.
 *   **🎨 Horneado de Texturas**: Hornea todos los colores de los vóxeles en un solo atlas para mantener tus "draw calls" al mínimo.
 *   **🛠 Controles en el Inspector**: Ajusta la escala, el tamaño del atlas y la densidad de malla directamente en el importador del asset.
-*   **🧩 Minimalista y Limpio**: Cero dependencias externas e incluye Assembly Definitions para tiempos de compilación óptimos.
+*   **🧩 Minimalist y Limpio**: Cero dependencias externas e incluye Assembly Definitions para tiempos de compilación óptimos.
+*   **🔄 Soporte para Vengi**: Ahora incluye soporte para leer e importar datos desde Vengi.
+
+---
+
+## 🚀 Próximas Características (Roadmap)
+
+*   **🎬 Sistema de Animación**: Actualmente estamos desarrollando un sistema de animación nativo para vóxeles para dar vida a tus personajes directamente dentro de la herramienta.
+*   **⚡ Optimización Continua**: Mejoras constantes de rendimiento para escenas a gran escala.
+*   **🛠 Herramientas de Edición Avanzadas**: Más herramientas integradas para la manipulación de vóxeles dentro del Editor de Unity.
 
 ---
 
