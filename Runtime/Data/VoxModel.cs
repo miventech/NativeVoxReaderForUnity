@@ -7,7 +7,17 @@ namespace Miventech.NativeVoxReader.Data
     public class VoxModel
     {
         public Vector3Int size; // Model dimensions
-        public Vector3Int position; // Model position in the world
+        public Vector3Int position; // Model position in the world (Unity coords, post basis-swap)
+        // Model orientation in the world, cumulative across the nTRN/nGRP hierarchy.
+        // Already converted from the MagicaVoxel-native right-handed Z-up basis into
+        // Unity's left-handed Y-up basis, so consumers can apply it directly to a
+        // Transform.localRotation without further adjustment.
+        public Quaternion rotation = Quaternion.identity;
+        // Optional _name attribute from the nearest ancestor nTRN chunk. Null when
+        // the artist didn't name the node. Consumers use this when they want to
+        // preserve artist naming intent (e.g. multi-object builders naming their
+        // GameObject children).
+        public string name;
         public Voxel[] voxels;  // List of voxels it contains
         public bool UsePaletteCustom;
         public AdvanceColor[] CustomPalette;
@@ -15,6 +25,7 @@ namespace Miventech.NativeVoxReader.Data
         {
             size = Vector3Int.zero;
             position = Vector3Int.zero;
+            rotation = Quaternion.identity;
             voxels = new Voxel[0];
         }
 
@@ -22,6 +33,7 @@ namespace Miventech.NativeVoxReader.Data
         {
             size = Vector3Int.zero;
             position = Vector3Int.zero;
+            rotation = Quaternion.identity;
             voxels = new Voxel[0];
 
             if (usePaletteCustom)

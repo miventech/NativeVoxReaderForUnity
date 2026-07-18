@@ -92,9 +92,17 @@ namespace Miventech.NativeVoxReader.Editor
                 var result = results[i];
                 if (result == null || result.mesh == null) continue;
 
-                GameObject modelGo = new GameObject(results.Length > 1 ? $"Model_{i}" : root.name);
+                var voxModel = loadedVoxFile.models[i];
+                // Prefer the artist's name from the .vox scene graph when
+                // available; fall back to Model_<i> for unnamed transforms so
+                // multi-object files still get a stable index-based label.
+                string childName = !string.IsNullOrEmpty(voxModel.name)
+                    ? voxModel.name
+                    : (results.Length > 1 ? $"Model_{i}" : root.name);
+                GameObject modelGo = new GameObject(childName);
                 modelGo.transform.SetParent(root.transform);
-                modelGo.transform.localPosition = (Vector3)loadedVoxFile.models[i].position * currentScale;
+                modelGo.transform.localPosition = (Vector3)voxModel.position * currentScale;
+                modelGo.transform.localRotation = voxModel.rotation;
                 var meshFilter = modelGo.AddComponent<MeshFilter>();
                 var meshRenderer = modelGo.AddComponent<MeshRenderer>();
 

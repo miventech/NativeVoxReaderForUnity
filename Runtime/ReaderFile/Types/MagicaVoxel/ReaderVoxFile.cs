@@ -136,13 +136,28 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                     reader.ReadInt32(); // layer id
                     int numFrames = reader.ReadInt32();
 
-                    // Using the first frame for the base position
+                    // Pull _name from the outer attributes so leaf writes can
+                    // preserve artist naming intent on the resulting VoxModel.
+                    // MagicaVoxel stores it on the outer nTRN dict, not the
+                    // frame dict.
+                    if (trn.attributes != null && trn.attributes.TryGetValue("_name", out var trnName))
+                        trn.name = trnName;
+
+                    // Using the first frame for the base position + orientation.
+                    // MagicaVoxel writes _t (translation, "x y z") and _r
+                    // (rotation, single byte in 24-orientation encoding) into
+                    // the frame's attribute dict. Absence = identity translation
+                    // / identity rotation, so untagged nTRNs behave as before.
                     if (numFrames > 0)
                     {
                         var frameAttr = ReadDictionary(reader);
                         if (frameAttr.ContainsKey("_t"))
                         {
                             trn.translation = ParseVector3Int(frameAttr["_t"]);
+                        }
+                        if (frameAttr.TryGetValue("_r", out var rStr) && byte.TryParse(rStr, out byte rByte))
+                        {
+                            trn.rotation = DecodeMVRotationToUnityQuaternion(rByte);
                         }
                         // Skip remaining frames (usually 1)
                         for (int i = 1; i < numFrames; i++) ReadDictionary(reader);
@@ -221,23 +236,114 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
             return Vector3Int.zero;
         }
 
+        /// <summary>
+        /// Decode MagicaVoxel's nTRN rotation byte into a Unity quaternion,
+        /// converting from the .vox spec's right-handed Z-up basis into Unity's
+        /// left-handed Y-up basis in the same step so downstream accumulation is
+        /// pure Unity math.
+        ///
+        /// <para>Byte layout per the .vox format spec:</para>
+        /// <list type="bullet">
+        ///   <item>bits 0-1 : index (0/1/2 = X/Y/Z) of the non-zero column in row 0</item>
+        ///   <item>bits 2-3 : index of the non-zero column in row 1 (only two remain)</item>
+        ///   <item>bit 4    : sign of row 0's non-zero (0 = +, 1 = -)</item>
+        ///   <item>bit 5    : sign of row 1's non-zero</item>
+        ///   <item>bit 6    : sign of row 2's non-zero</item>
+        /// </list>
+        /// This gives a 3×3 signed permutation matrix — one of 24 axis-aligned
+        /// orientations. Row 2's column is determined by elimination (the one
+        /// index of X/Y/Z not used by rows 0 and 1).
+        ///
+        /// <para>The basis change is applied as <c>R_unity = B * R_mv * B</c>
+        /// where <c>B</c> swaps Y↔Z. Concretely: swap rows 1↔2 of the parsed
+        /// matrix, then swap columns 1↔2 within each row. This preserves the
+        /// physical rotation but expresses it against Unity's basis, so
+        /// <c>Matrix4x4.rotation</c> extracts a correct <see cref="Quaternion"/>.
+        /// Identity (<c>_r = 4</c>) round-trips to <see cref="Quaternion.identity"/>.</para>
+        /// </summary>
+        private static Quaternion DecodeMVRotationToUnityQuaternion(byte r)
+        {
+            int col0 = r & 0x03;
+            int col1 = (r >> 2) & 0x03;
+            int col2 = 3 - col0 - col1; // implied by elimination (0+1+2=3)
+
+            float sign0 = ((r >> 4) & 1) == 0 ? 1f : -1f;
+            float sign1 = ((r >> 5) & 1) == 0 ? 1f : -1f;
+            float sign2 = ((r >> 6) & 1) == 0 ? 1f : -1f;
+
+            // Build the MV-space rotation matrix as three rows.
+            Vector3 row0 = Vector3.zero; row0[col0] = sign0;
+            Vector3 row1 = Vector3.zero; row1[col1] = sign1;
+            Vector3 row2 = Vector3.zero; row2[col2] = sign2;
+
+            // Basis change B (swap Y↔Z). First swap rows 1↔2:
+            Vector3 tmp = row1; row1 = row2; row2 = tmp;
+            // Then swap columns Y↔Z within each row:
+            (row0.y, row0.z) = (row0.z, row0.y);
+            (row1.y, row1.z) = (row1.z, row1.y);
+            (row2.y, row2.z) = (row2.z, row2.y);
+
+            Matrix4x4 m = Matrix4x4.identity;
+            m.SetRow(0, new Vector4(row0.x, row0.y, row0.z, 0));
+            m.SetRow(1, new Vector4(row1.x, row1.y, row1.z, 0));
+            m.SetRow(2, new Vector4(row2.x, row2.y, row2.z, 0));
+            return m.rotation;
+        }
+
         private static void ApplyTransformations(VoxFile voxFile, List<VoxNode> nodes)
         {
-            // Quick ID to node mapping
+            // Quick ID → node mapping.
             Dictionary<int, VoxNode> nodeMap = new Dictionary<int, VoxNode>();
             foreach (var node in nodes) nodeMap[node.id] = node;
 
-            // Traverse TransformNodes to find child models
+            // The scene-graph parent/child relationships live implicitly across
+            // nGRP.childrenIds and nTRN.childId. Any node id that appears as a
+            // child of another node is NOT a root; only unreferenced nTRN nodes
+            // are true recursion roots.
+            //
+            // Previously the outer loop iterated every nTRN as if it were a
+            // root, which caused "last writer wins" overwrites at the leaves —
+            // grouped scenes lost their parent-chain offsets (and any rotation
+            // never made it through at all because _r wasn't parsed). Restricting
+            // to real roots fixes the position accumulation cleanly.
+            HashSet<int> childIds = new HashSet<int>();
             foreach (var node in nodes)
             {
-                if (node is TransformNode trn)
+                switch (node)
                 {
-                    FindAndApplyToModel(trn.childId, trn.translation, nodeMap, voxFile);
+                    case TransformNode t: childIds.Add(t.childId); break;
+                    case GroupNode     g:
+                        foreach (int c in g.childrenIds) childIds.Add(c);
+                        break;
+                }
+            }
+
+            foreach (var node in nodes)
+            {
+                if (node is TransformNode trn && !childIds.Contains(trn.id))
+                {
+                    // Root nTRN — start accumulation from identity.
+                    // Feed the root's own translation/rotation/name in as the
+                    // starting accumulator; downstream recursion composes each
+                    // additional nTRN it walks through.
+                    FindAndApplyToModel(
+                        trn.childId,
+                        (Vector3)trn.translation,
+                        trn.rotation,
+                        trn.name,
+                        nodeMap,
+                        voxFile);
                 }
             }
         }
 
-        private static void FindAndApplyToModel(int nodeId, Vector3Int translation, Dictionary<int, VoxNode> nodeMap, VoxFile voxFile)
+        private static void FindAndApplyToModel(
+            int nodeId,
+            Vector3 accumulatedPosition,
+            Quaternion accumulatedRotation,
+            string currentName,
+            Dictionary<int, VoxNode> nodeMap,
+            VoxFile voxFile)
         {
             if (!nodeMap.ContainsKey(nodeId)) return;
 
@@ -246,19 +352,38 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
             {
                 if (shp.modelId < voxFile.models.Count)
                 {
-                    voxFile.models[shp.modelId].position = translation;
+                    // Leaf — commit the accumulated transform + most recent
+                    // named nTRN to the model. Position stored as Vector3Int
+                    // (rounded); voxel-scale scenes never need sub-voxel
+                    // precision on model placement.
+                    var model = voxFile.models[shp.modelId];
+                    model.position = new Vector3Int(
+                        Mathf.RoundToInt(accumulatedPosition.x),
+                        Mathf.RoundToInt(accumulatedPosition.y),
+                        Mathf.RoundToInt(accumulatedPosition.z));
+                    model.rotation = accumulatedRotation;
+                    // Only overwrite when we actually have a name — preserves
+                    // whatever another traversal path might have set if the
+                    // .vox reuses a model across shapes (uncommon but legal).
+                    if (!string.IsNullOrEmpty(currentName)) model.name = currentName;
                 }
             }
             else if (node is GroupNode grp)
             {
                 foreach (int childId in grp.childrenIds)
                 {
-                    FindAndApplyToModel(childId, translation, nodeMap, voxFile);
+                    FindAndApplyToModel(childId, accumulatedPosition, accumulatedRotation, currentName, nodeMap, voxFile);
                 }
             }
             else if (node is TransformNode nextTrn)
             {
-                FindAndApplyToModel(nextTrn.childId, translation + nextTrn.translation, nodeMap, voxFile);
+                // Standard SE(3) composition: child's local translation is
+                // rotated by the parent's world rotation before being added.
+                // Rotation composes on the right (world = parent * local).
+                Vector3 nextPos = accumulatedPosition + accumulatedRotation * (Vector3)nextTrn.translation;
+                Quaternion nextRot = accumulatedRotation * nextTrn.rotation;
+                string nextName = string.IsNullOrEmpty(nextTrn.name) ? currentName : nextTrn.name;
+                FindAndApplyToModel(nextTrn.childId, nextPos, nextRot, nextName, nodeMap, voxFile);
             }
         }
 
