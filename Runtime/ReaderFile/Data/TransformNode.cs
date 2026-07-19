@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using Miventech.NativeVoxReader.Data;
 using UnityEngine;
 
 namespace Miventech.NativeVoxReader.Tools.ReaderFile.Data
@@ -15,6 +17,12 @@ namespace Miventech.NativeVoxReader.Tools.ReaderFile.Data
         // not present. Preserved so leaf writes can propagate artist naming
         // intent to VoxModel.
         public string name;
+        // Per-frame local transforms. Populated for EVERY nTRN — even
+        // single-frame ones get one entry so downstream code can uniformly
+        // treat these as animation keyframe streams. Animation is present
+        // when Count > 1; single-frame nTRNs contribute their one keyframe
+        // as a "static" entry that the composer just samples through.
+        public List<TransformKeyframe> keyframes = new List<TransformKeyframe>();
     }
 }
 
