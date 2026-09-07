@@ -17,10 +17,11 @@ namespace Miventech.NativeVoxReader.CreatorObjects
         {
             GameObject ChildObject = new GameObject("VoxModel_Palette");
             ChildObject.transform.SetParent(this.transform);
-            
+
             // Note: VoxModel position is in Voxel coordinates, adjusted by scale
             ChildObject.transform.localPosition = (Vector3)model.position * scale;
-            ChildObject.transform.localRotation = Quaternion.identity;
+            // Apply the model rotation so runtime creation matches the editor import pipeline.
+            ChildObject.transform.localRotation = model.rotation;
             ChildObject.transform.localScale = Vector3.one;
 
             MeshFilter meshFilter = ChildObject.AddComponent<MeshFilter>();

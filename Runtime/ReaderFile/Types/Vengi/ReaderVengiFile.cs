@@ -6,7 +6,7 @@ using System.Text;
 using UnityEngine;
 using Miventech.NativeVoxReader.Data;
 
-namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
+namespace Miventech.NativeVoxReader.Readers
 {
     public class ReaderVengiFile : BaseReaderFile
     {
@@ -20,7 +20,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
         public override VoxFile Read(string path)
         {
             TempPalette = null;
-            Debug.Log("Reading VENGI file: " + path);
+            if (BaseReaderFile.VerboseLogging) Debug.Log("Reading VENGI file: " + path);
             VoxFile voxFile = new VoxFile();
             voxFile.models = new List<VoxModel>();
             TempPalette = null;
@@ -34,7 +34,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                 byte g = (byte)((color >> 8) & 0xFF);   // Keeps g
                 byte r = (byte)((color >> 16) & 0xFF);  // Was b
                 byte a = (byte)((color >> 24) & 0xFF);
-                
+
                 // Force alpha 255 to avoid invisible voxels if default has 0 alpha
                 voxFile.palette[i] = new Color32(r, g, b, 255);
             }
@@ -54,7 +54,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                     }
                     else
                     {
-                        Debug.Log("Valid VENGI header found.");
+                        if (BaseReaderFile.VerboseLogging) Debug.Log("Valid VENGI header found.");
                     }
 
                     // 2. Compressed Stream
@@ -100,7 +100,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
 
         private bool ProcessChunk(string chunkMagic, BinaryReader reader, VoxFile voxFile, uint version, Vector3Int parentOffset)
         {
-            Debug.Log("Processing chunk: " + chunkMagic);
+            if (BaseReaderFile.VerboseLogging) Debug.Log("Processing chunk: " + chunkMagic);
             switch (chunkMagic)
             {
                 case "NODE":
@@ -154,14 +154,14 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
             {
                 string chunkMagic = ReadFourCC(reader);
                 if (string.IsNullOrEmpty(chunkMagic)) break;
-                Debug.Log("Reading chunk in NODE: " + chunkMagic);
+                if (BaseReaderFile.VerboseLogging) Debug.Log("Reading chunk in NODE: " + chunkMagic);
                 if (chunkMagic == "ENDN")
                 {
                     break; // End of this node
                 }
 
                 bool handled = false;
-                
+
                 switch (chunkMagic)
                 {
                     case "NODE":
@@ -229,16 +229,21 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
             if (sizeX <= 0 || sizeY <= 0 || sizeZ <= 0) return;
 
             VoxModel model = new VoxModel();
-            model.size = new Vector3Int(sizeX, sizeY, sizeZ);
-            Vector3Int modelPosition = offset + new Vector3Int(minX, minZ, minY); // Swap Y and Z for Unity's coordinate system
-            model.position = new Vector3Int(modelPosition.x, modelPosition.z, modelPosition.y);
+            // Voxels are stored pre-swapped into Unity order (x, z, y), so the size
+            // must be expressed in Unity order too: size.y holds the Vengi Z extent
+            // and size.z the Vengi Y extent. Otherwise Greedy Meshing indexes the
+            // volume with mismatched dimensions and valid voxels get discarded.
+            model.size = new Vector3Int(sizeX, sizeZ, sizeY);
+            // `offset` is accumulated in Unity order upstream; only the bounding-box
+            // Y/Z needs swapping. The old code swapped twice, corrupting the position.
+            model.position = new Vector3Int(offset.x + minX, offset.z + minZ, offset.y + minY);
 
             if (TempPalette != null)
             {
                 model.UsePaletteCustom = true;
                 model.CustomPalette = TempPalette;
             }
-            
+
             List<Voxel> voxels = new List<Voxel>();
 
             for (int x = minX; x <= maxX; x++)
@@ -271,7 +276,10 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                                localY >= 0 && localY < 256 &&
                                localZ >= 0 && localZ < 256)
                             {
-                                voxels.Add(new Voxel((byte)localX, (byte)localZ,(byte)localY, (byte)(color + 1)));
+                                // Palette indices are 1-based (0 means "air"). Clamp so a
+                                // color byte of 255 doesn't overflow back to 0 (invisible voxel).
+                                if (color == 255) color = 254;
+                                voxels.Add(new Voxel((byte)localX, (byte)localZ, (byte)localY, (byte)(color + 1)));
                             }
                         }
                     }
@@ -288,8 +296,8 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
             ReadPascalString(reader); // Palette Name
             int count = reader.ReadInt32();
 
-            Debug.Log($"Reading PALC with {count} colors. Version: {version}");
-            AdvanceColor[] palette = new AdvanceColor[255];
+            if (BaseReaderFile.VerboseLogging) Debug.Log($"Reading PALC with {count} colors. Version: {version}");
+            AdvanceColor[] palette = new AdvanceColor[256]; // MagicaVoxel-style palette supports up to 256 colors
             // 1. Colors
             for (int i = 0; i < count; i++)
             {
@@ -297,12 +305,12 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                 byte g = reader.ReadByte();
                 byte b = reader.ReadByte();
                 byte a = reader.ReadByte();
-                
+
                 // Keep alpha 255 for opaque rendering in Unity
                 if (i < 256)
                 {
                     palette[i] = new Color32(r, g, b, a);
-                    Debug.Log("Read color " + i + ": " + palette[i] + $" (raw RGBA: {r},{g},{b},{a})");
+                    if (BaseReaderFile.VerboseLogging) Debug.Log("Read color " + i + ": " + palette[i] + $" (raw RGBA: {r},{g},{b},{a})");
                 }
             }
 
@@ -317,31 +325,34 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
 
             for (int i = 0; i < count; i++)
             {
-                palette[i].ColorIndex = reader.ReadByte();;
+                byte uiIndex = reader.ReadByte();
+                if (i < palette.Length) palette[i].ColorIndex = uiIndex;
             }
 
             // 4: Read Names Materials
             for (int i = 0; i < count; i++)
             {
-                palette[i].Name = ReadPascalString(reader); // Color Names (Strings) - Unverified structure, may not be present in all versions or files
+                string colorName = ReadPascalString(reader); // Color Names (Strings) - Unverified structure, may not be present in all versions or files
+                if (i < palette.Length) palette[i].Name = colorName;
             }
 
 
             //5: read again number colors for materials, seems to be duplicated count in some versions
-            reader.ReadUInt32(); 
+            reader.ReadUInt32();
 
 
             //6: Read Material Types and Properties - Unverified structure, may not be present in all versions or files
             for (int i = 0; i < count; i++)
             {
-                palette[i].MaterialType = reader.ReadInt32(); // Material Type (0=none, 1=diffuse, 2=metal, 3=glass, etc.)
+                int materialType = reader.ReadInt32(); // Material Type (0=none, 1=diffuse, 2=metal, 3=glass, etc.)
                 ushort MaterialMax = reader.ReadByte();
-                for(ushort j = 0; j < MaterialMax; j++)
+                if (i < palette.Length) palette[i].MaterialType = materialType;
+                for (ushort j = 0; j < MaterialMax; j++)
                 {
                     string PropertyName = ReadPascalString(reader);
                     float PropertyValue = reader.ReadSingle();
-                    palette[i].properties.Add(PropertyName, PropertyValue);
-                    Debug.Log($"Material (type: {palette[i].MaterialType}) {i} Property: {PropertyName} : {PropertyValue}");
+                    if (i < palette.Length) palette[i].properties.Add(PropertyName, PropertyValue);
+                    if (BaseReaderFile.VerboseLogging) Debug.Log($"Material (type: {materialType}) {i} Property: {PropertyName} : {PropertyValue}");
                 }
             }
             return palette;
@@ -354,7 +365,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
             {
                 string NameProp = ReadPascalString(reader); // key
                 string valueProp = ReadPascalString(reader); // value
-                Debug.Log($"Node Property: {NameProp} : {valueProp}");
+                if (BaseReaderFile.VerboseLogging) Debug.Log($"Node Property: {NameProp} : {valueProp}");
             }
         }
 

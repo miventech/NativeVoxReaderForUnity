@@ -2,7 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using Miventech.NativeVoxReader.Data;
 using Miventech.NativeVoxReader.Abstract;
-using Miventech.NativeVoxReader.Tools;
+using Miventech.NativeVoxReader.VoxRenderer;
 using Miventech.NativeVoxReader.Tools.VoxFileBakeTexture;
 
 namespace Miventech.NativeVoxReader.CreatorObjects
@@ -18,14 +18,15 @@ namespace Miventech.NativeVoxReader.CreatorObjects
     {
         public int maxAtlasSize = 4096;
         [Tooltip("Max width/height in voxels for a single generated quad.")]
-        public int maxQuadSize = 64; 
+        public int maxQuadSize = 64;
         public float scale = 0.1f;
         public override void BuildObject(VoxModel model, Color32[] palette)
         {
             GameObject ChildObject = new GameObject("VoxModel");
             ChildObject.transform.SetParent(this.transform);
             ChildObject.transform.localPosition = (Vector3)model.position * scale;
-            ChildObject.transform.localRotation = Quaternion.identity;
+            // Apply the model rotation so runtime creation matches the editor import pipeline.
+            ChildObject.transform.localRotation = model.rotation;
             ChildObject.transform.localScale = Vector3.one;
             MeshFilter meshFilter = ChildObject.AddComponent<MeshFilter>();
             MeshRenderer meshRenderer = ChildObject.AddComponent<MeshRenderer>();
@@ -36,10 +37,19 @@ namespace Miventech.NativeVoxReader.CreatorObjects
                 Scale = scale
             });
 
-            meshFilter.mesh = bakedModel.mesh;
-            meshRenderer.material = bakedModel.material;
+            // ConvertModel can return null when the model produces no quads (empty mesh).
+            if (bakedModel != null && bakedModel.mesh != null)
+            {
+                meshFilter.mesh = bakedModel.mesh;
+                meshRenderer.material = bakedModel.material;
+            }
+            else
+            {
+                if (Application.isEditor) Object.DestroyImmediate(ChildObject);
+                else Object.Destroy(ChildObject);
+            }
         }
-        
+
     }
 }
 

@@ -3,11 +3,11 @@ using System.IO;
 using System.Collections.Generic;
 using UnityEngine;
 using Miventech.NativeVoxReader.Data;
-using Miventech.NativeVoxReader.Tools.ReaderFile.Data;
+using Miventech.NativeVoxReader.Readers.Data;
 
-namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
+namespace Miventech.NativeVoxReader.Readers
 {
-    public class ReaderVoxFile: BaseReaderFile
+    public class ReaderVoxFile : BaseReaderFile
     {
         public override bool IsValidFile(string path)
         {
@@ -21,9 +21,9 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
             var loadedVoxFile = ParseVoxFile(path);
             if (loadedVoxFile != null)
             {
-                Debug.Log($"Loaded VOX file with {loadedVoxFile.models.Count} models.");
-                // Default palette fallback
-                if (loadedVoxFile.palette[0].a == 0 && loadedVoxFile.palette[0].r == 0 && loadedVoxFile.palette[0].g == 0 && loadedVoxFile.palette[0].b == 0)
+                if (BaseReaderFile.VerboseLogging) Debug.Log($"Loaded VOX file with {loadedVoxFile.models.Count} models.");
+                // Default palette fallback: only when the file shipped no RGBA chunk.
+                if (!loadedVoxFile.paletteLoaded)
                 {
                     loadedVoxFile.palette = GetDefaultPalette();
                 }
@@ -125,6 +125,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                         byte a = reader.ReadByte();
                         voxFile.palette[i] = new Color32(r, g, b, a);
                     }
+                    voxFile.paletteLoaded = true;
                     break;
 
                 case "nTRN":
@@ -170,7 +171,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                         if (f == 0)
                         {
                             trn.translation = kf.translation;
-                            trn.rotation    = kf.rotation;
+                            trn.rotation = kf.rotation;
                         }
                     }
                     allNodes.Add(trn);
@@ -291,6 +292,15 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
             int col1 = (r >> 2) & 0x03;
             int col2 = 3 - col0 - col1; // implied by elimination (0+1+2=3)
 
+            // Validate: the three columns must be a permutation of {0,1,2}. Corrupted
+            // files can carry out-of-range bytes (e.g. _r = 0) — fall back to identity
+            // rotation instead of throwing and aborting the whole file parse.
+            if (col0 > 2 || col1 > 2 || col0 == col1 || col2 < 0 || col2 > 2)
+            {
+                Debug.LogWarning($"Invalid MagicaVoxel rotation byte 0x{r:X2}; defaulting to identity rotation.");
+                return Quaternion.identity;
+            }
+
             float sign0 = ((r >> 4) & 1) == 0 ? 1f : -1f;
             float sign1 = ((r >> 5) & 1) == 0 ? 1f : -1f;
             float sign2 = ((r >> 6) & 1) == 0 ? 1f : -1f;
@@ -336,7 +346,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                 switch (node)
                 {
                     case TransformNode t: childIds.Add(t.childId); break;
-                    case GroupNode     g:
+                    case GroupNode g:
                         foreach (int c in g.childrenIds) childIds.Add(c);
                         break;
                 }
@@ -410,7 +420,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                         var anim = new VoxShapeAnimation
                         {
                             primaryModelId = shp.modelId,
-                            name           = currentName,
+                            name = currentName,
                         };
                         if (chainAnimated)
                             anim.transformKeyframes = ComposeChainKeyframes(parentChain);
@@ -483,12 +493,12 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                 }
                 result.Add(new TransformKeyframe
                 {
-                    frameIndex  = N,
+                    frameIndex = N,
                     translation = new Vector3Int(
                         Mathf.RoundToInt(worldT.x),
                         Mathf.RoundToInt(worldT.y),
                         Mathf.RoundToInt(worldT.z)),
-                    rotation    = worldR,
+                    rotation = worldR,
                 });
             }
             return result;
@@ -531,7 +541,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                 if (frame >= a.frameIndex && frame <= b.frameIndex)
                 {
                     float span = Mathf.Max(1, b.frameIndex - a.frameIndex);
-                    float u    = (frame - a.frameIndex) / span;
+                    float u = (frame - a.frameIndex) / span;
                     t = Vector3.Lerp((Vector3)a.translation, (Vector3)b.translation, u);
                     r = Quaternion.Slerp(a.rotation, b.rotation, u);
                     return;
@@ -578,8 +588,8 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
         0xff004400, 0xff003300, 0xff002200, 0xff001100, 0xffee0000, 0xffdd0000, 0xffcc0000, 0xffbb0000, 0xffaa0000, 0xff990000, 0xff880000, 0xff770000, 0xff660000, 0xff550000, 0xff440000, 0xff330000,
         0xff220000, 0xff110000, 0xffeeeeee, 0xffdddddd, 0xffcccccc, 0xffbbbbbb, 0xffaaaaaa, 0xff999999, 0xff888888, 0xff777777, 0xff666666, 0xff555555, 0xff444444, 0xff333333, 0xff222222, 0xff111111
         };
-    
-    
+
+
     }
 }
 

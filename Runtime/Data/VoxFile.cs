@@ -16,6 +16,9 @@ namespace Miventech.NativeVoxReader.Data
         // own numModels > 1.
         public List<VoxShapeAnimation> animations = new List<VoxShapeAnimation>();
         public AdvanceColor[] palette = new AdvanceColor[256]; // MagicaVoxel uses a 256-color palette
+        // True once an RGBA chunk was read from the file. Needed to distinguish the
+        // white placeholder palette from a real one when applying the default fallback.
+        public bool paletteLoaded = false;
 
         public VoxFile()
         {
