@@ -1,8 +1,8 @@
 {
   "name": "com.miventech.nativevoxreader",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "displayName": "Native Vox Reader",
-  "description": "Seamlessly import MagicaVoxel .vox files as native Unity assets.",
+  "description": "Seamlessly import MagicaVoxel .vox and Vengi .vengi files as native Unity assets. Includes greedy meshing optimization, texture baking, palette override, transformation hierarchy (rotations and groups) and voxel animation data reading.",
   "unity": "2020.3",
   "author": {
     "name": "Miventech",
@@ -12,6 +12,8 @@
   "keywords": [
     "vox",
     "magicavoxel",
+    "vengi",
+    "animation",
     "importer",
     "voxel",
     "3d"

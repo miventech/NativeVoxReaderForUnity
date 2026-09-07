@@ -32,7 +32,7 @@ ScriptedImporter:
   - serializedVersion: 2
     rgba: 4283124555
   - serializedVersion: 2
-    rgba: 4279176988
+    rgba: 4287927544
   - serializedVersion: 2
     rgba: 4278212281
   - serializedVersion: 2
@@ -394,7 +394,7 @@ ScriptedImporter:
   - serializedVersion: 2
     rgba: 4283124555
   - serializedVersion: 2
-    rgba: 4280624421
+    rgba: 4283948439
   - serializedVersion: 2
     rgba: 4283124555
   - serializedVersion: 2
@@ -524,13 +524,13 @@ ScriptedImporter:
   - serializedVersion: 2
     rgba: 0
   settings:
-    rid: 9010086916211867773
+    rid: 7786282406671810563
   references:
     version: 2
     RefIds:
-    - rid: 9010086916211867773
+    - rid: 7786282406671810563
       type: {class: VoxFileToUnityBakeTextureSetting, ns: Miventech.NativeVoxReader.Tools.VoxFileBakeTexture, asm: Miventech.NativeVoxReader}
       data:
-        maxAtlasSize: 4096
-        maxQuadSize: 48
+        maxAtlasSize: 1024
+        maxQuadSize: 64
         Scale: 0.1

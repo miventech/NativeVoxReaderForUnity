@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 4c8dfe125f79b8649bfbc12336675243
+guid: a6bc103c781026942b820c1d19bd57f0
 ScriptedImporter:
   internalIDToNameTable: []
   externalObjects: {}
@@ -9,12 +9,14 @@ ScriptedImporter:
   assetBundleVariant: 
   script: {fileID: 11500000, guid: ab5829fc25efa6b48a46fc7ef9225ba8, type: 3}
   selectedRenderType: VoxBakedTextureRenderer
+  overridePalette: 0
+  customPalette: []
   settings:
-    rid: 9010086916211867784
+    rid: 1000
   references:
     version: 2
     RefIds:
-    - rid: 9010086916211867784
+    - rid: 1000
       type: {class: VoxFileToUnityBakeTextureSetting, ns: Miventech.NativeVoxReader.Tools.VoxFileBakeTexture, asm: Miventech.NativeVoxReader}
       data:
         maxAtlasSize: 4096
