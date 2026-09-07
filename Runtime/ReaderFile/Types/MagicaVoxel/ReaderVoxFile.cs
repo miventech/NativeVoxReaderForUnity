@@ -136,16 +136,42 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                     reader.ReadInt32(); // layer id
                     int numFrames = reader.ReadInt32();
 
-                    // Using the first frame for the base position
-                    if (numFrames > 0)
+                    // Pull _name from the outer attributes so leaf writes can
+                    // preserve artist naming intent on the resulting VoxModel.
+                    // MagicaVoxel stores it on the outer nTRN dict, not the
+                    // frame dict.
+                    if (trn.attributes != null && trn.attributes.TryGetValue("_name", out var trnName))
+                        trn.name = trnName;
+
+                    // Parse EVERY frame into the keyframes list. Frame 0 also
+                    // writes to translation/rotation for backwards compat with
+                    // frame-0-only consumers (VoxelTextureGenerator, the
+                    // single-object build tool, etc.).
+                    //
+                    // MagicaVoxel writes _t (translation, "x y z"), _r (rotation,
+                    // single byte in 24-orientation encoding), and _f (integer
+                    // frame index — absent means frame 0) into each frame's
+                    // attribute dict. Absent _t/_r = identity.
+                    for (int f = 0; f < numFrames; f++)
                     {
                         var frameAttr = ReadDictionary(reader);
-                        if (frameAttr.ContainsKey("_t"))
+                        var kf = new TransformKeyframe();
+                        if (frameAttr.TryGetValue("_f", out var fStr) && int.TryParse(fStr, out int fIdx))
+                            kf.frameIndex = fIdx;
+                        else
+                            kf.frameIndex = f;   // Fallback: assume dense frames when _f is absent.
+                        if (frameAttr.TryGetValue("_t", out var tStr))
+                            kf.translation = ParseVector3Int(tStr);
+                        if (frameAttr.TryGetValue("_r", out var rStr) && byte.TryParse(rStr, out byte rByte))
+                            kf.rotation = DecodeMVRotationToUnityQuaternion(rByte);
+                        trn.keyframes.Add(kf);
+
+                        // Frame 0 also populates the single-frame fields.
+                        if (f == 0)
                         {
-                            trn.translation = ParseVector3Int(frameAttr["_t"]);
+                            trn.translation = kf.translation;
+                            trn.rotation    = kf.rotation;
                         }
-                        // Skip remaining frames (usually 1)
-                        for (int i = 1; i < numFrames; i++) ReadDictionary(reader);
                     }
                     allNodes.Add(trn);
                     break;
@@ -167,11 +193,24 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                     shp.id = reader.ReadInt32();
                     shp.attributes = ReadDictionary(reader);
                     int numModels = reader.ReadInt32();
-                    // Typically a Shape Node points to a single model
-                    if (numModels > 0)
+                    // Parse EVERY (modelId, _f) entry — model-swap animation
+                    // stores numModels > 1 with a per-model _f keyframe index.
+                    // Prior versions of this reader read only the first entry
+                    // and let the outer "consume remaining bytes" padding
+                    // catch the misalignment; that silently dropped every
+                    // animation frame past the first. First entry still writes
+                    // to shp.modelId for the frame-0 code path.
+                    for (int m = 0; m < numModels; m++)
                     {
-                        shp.modelId = reader.ReadInt32();
-                        ReadDictionary(reader); // skip model attributes
+                        int mid = reader.ReadInt32();
+                        var mAttr = ReadDictionary(reader);
+                        var sk = new ShapeKeyframe { modelId = mid };
+                        if (mAttr.TryGetValue("_f", out var fStr) && int.TryParse(fStr, out int fIdx))
+                            sk.frameIndex = fIdx;
+                        else
+                            sk.frameIndex = m;
+                        shp.keyframes.Add(sk);
+                        if (m == 0) shp.modelId = mid;
                     }
                     allNodes.Add(shp);
                     break;
@@ -221,23 +260,117 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
             return Vector3Int.zero;
         }
 
+        /// <summary>
+        /// Decode MagicaVoxel's nTRN rotation byte into a Unity quaternion,
+        /// converting from the .vox spec's right-handed Z-up basis into Unity's
+        /// left-handed Y-up basis in the same step so downstream accumulation is
+        /// pure Unity math.
+        ///
+        /// <para>Byte layout per the .vox format spec:</para>
+        /// <list type="bullet">
+        ///   <item>bits 0-1 : index (0/1/2 = X/Y/Z) of the non-zero column in row 0</item>
+        ///   <item>bits 2-3 : index of the non-zero column in row 1 (only two remain)</item>
+        ///   <item>bit 4    : sign of row 0's non-zero (0 = +, 1 = -)</item>
+        ///   <item>bit 5    : sign of row 1's non-zero</item>
+        ///   <item>bit 6    : sign of row 2's non-zero</item>
+        /// </list>
+        /// This gives a 3×3 signed permutation matrix — one of 24 axis-aligned
+        /// orientations. Row 2's column is determined by elimination (the one
+        /// index of X/Y/Z not used by rows 0 and 1).
+        ///
+        /// <para>The basis change is applied as <c>R_unity = B * R_mv * B</c>
+        /// where <c>B</c> swaps Y↔Z. Concretely: swap rows 1↔2 of the parsed
+        /// matrix, then swap columns 1↔2 within each row. This preserves the
+        /// physical rotation but expresses it against Unity's basis, so
+        /// <c>Matrix4x4.rotation</c> extracts a correct <see cref="Quaternion"/>.
+        /// Identity (<c>_r = 4</c>) round-trips to <see cref="Quaternion.identity"/>.</para>
+        /// </summary>
+        private static Quaternion DecodeMVRotationToUnityQuaternion(byte r)
+        {
+            int col0 = r & 0x03;
+            int col1 = (r >> 2) & 0x03;
+            int col2 = 3 - col0 - col1; // implied by elimination (0+1+2=3)
+
+            float sign0 = ((r >> 4) & 1) == 0 ? 1f : -1f;
+            float sign1 = ((r >> 5) & 1) == 0 ? 1f : -1f;
+            float sign2 = ((r >> 6) & 1) == 0 ? 1f : -1f;
+
+            // Build the MV-space rotation matrix as three rows.
+            Vector3 row0 = Vector3.zero; row0[col0] = sign0;
+            Vector3 row1 = Vector3.zero; row1[col1] = sign1;
+            Vector3 row2 = Vector3.zero; row2[col2] = sign2;
+
+            // Basis change B (swap Y↔Z). First swap rows 1↔2:
+            Vector3 tmp = row1; row1 = row2; row2 = tmp;
+            // Then swap columns Y↔Z within each row:
+            (row0.y, row0.z) = (row0.z, row0.y);
+            (row1.y, row1.z) = (row1.z, row1.y);
+            (row2.y, row2.z) = (row2.z, row2.y);
+
+            Matrix4x4 m = Matrix4x4.identity;
+            m.SetRow(0, new Vector4(row0.x, row0.y, row0.z, 0));
+            m.SetRow(1, new Vector4(row1.x, row1.y, row1.z, 0));
+            m.SetRow(2, new Vector4(row2.x, row2.y, row2.z, 0));
+            return m.rotation;
+        }
+
         private static void ApplyTransformations(VoxFile voxFile, List<VoxNode> nodes)
         {
-            // Quick ID to node mapping
+            // Quick ID → node mapping.
             Dictionary<int, VoxNode> nodeMap = new Dictionary<int, VoxNode>();
             foreach (var node in nodes) nodeMap[node.id] = node;
 
-            // Traverse TransformNodes to find child models
+            // The scene-graph parent/child relationships live implicitly across
+            // nGRP.childrenIds and nTRN.childId. Any node id that appears as a
+            // child of another node is NOT a root; only unreferenced nTRN nodes
+            // are true recursion roots.
+            //
+            // Previously the outer loop iterated every nTRN as if it were a
+            // root, which caused "last writer wins" overwrites at the leaves —
+            // grouped scenes lost their parent-chain offsets (and any rotation
+            // never made it through at all because _r wasn't parsed). Restricting
+            // to real roots fixes the position accumulation cleanly.
+            HashSet<int> childIds = new HashSet<int>();
             foreach (var node in nodes)
             {
-                if (node is TransformNode trn)
+                switch (node)
                 {
-                    FindAndApplyToModel(trn.childId, trn.translation, nodeMap, voxFile);
+                    case TransformNode t: childIds.Add(t.childId); break;
+                    case GroupNode     g:
+                        foreach (int c in g.childrenIds) childIds.Add(c);
+                        break;
+                }
+            }
+
+            foreach (var node in nodes)
+            {
+                if (node is TransformNode trn && !childIds.Contains(trn.id))
+                {
+                    // Root nTRN — start accumulation from identity.
+                    // Feed the root's own translation/rotation/name in as the
+                    // starting accumulator; downstream recursion composes each
+                    // additional nTRN it walks through.
+                    var chain = new List<TransformNode> { trn };
+                    FindAndApplyToModel(
+                        trn.childId,
+                        (Vector3)trn.translation,
+                        trn.rotation,
+                        trn.name,
+                        chain,
+                        nodeMap,
+                        voxFile);
                 }
             }
         }
 
-        private static void FindAndApplyToModel(int nodeId, Vector3Int translation, Dictionary<int, VoxNode> nodeMap, VoxFile voxFile)
+        private static void FindAndApplyToModel(
+            int nodeId,
+            Vector3 accumulatedPosition,
+            Quaternion accumulatedRotation,
+            string currentName,
+            List<TransformNode> parentChain,
+            Dictionary<int, VoxNode> nodeMap,
+            VoxFile voxFile)
         {
             if (!nodeMap.ContainsKey(nodeId)) return;
 
@@ -246,20 +379,167 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
             {
                 if (shp.modelId < voxFile.models.Count)
                 {
-                    voxFile.models[shp.modelId].position = translation;
+                    // Leaf — commit the accumulated transform + most recent
+                    // named nTRN to the model. Position stored as Vector3Int
+                    // (rounded); voxel-scale scenes never need sub-voxel
+                    // precision on model placement.
+                    var model = voxFile.models[shp.modelId];
+                    model.position = new Vector3Int(
+                        Mathf.RoundToInt(accumulatedPosition.x),
+                        Mathf.RoundToInt(accumulatedPosition.y),
+                        Mathf.RoundToInt(accumulatedPosition.z));
+                    model.rotation = accumulatedRotation;
+                    // Only overwrite when we actually have a name — preserves
+                    // whatever another traversal path might have set if the
+                    // .vox reuses a model across shapes (uncommon but legal).
+                    if (!string.IsNullOrEmpty(currentName)) model.name = currentName;
+
+                    // Emit a VoxShapeAnimation entry when this shape or any
+                    // ancestor nTRN carries keyframe animation. Static shapes
+                    // (single-frame everywhere, single-model swap) are skipped
+                    // — the frame-0 fields above are enough for them, and
+                    // consumers that don't care about animation see an empty
+                    // voxFile.animations list.
+                    bool chainAnimated = false;
+                    for (int i = 0; i < parentChain.Count && !chainAnimated; i++)
+                        if (parentChain[i].keyframes.Count > 1) chainAnimated = true;
+                    bool swapAnimated = shp.keyframes.Count > 1;
+
+                    if (chainAnimated || swapAnimated)
+                    {
+                        var anim = new VoxShapeAnimation
+                        {
+                            primaryModelId = shp.modelId,
+                            name           = currentName,
+                        };
+                        if (chainAnimated)
+                            anim.transformKeyframes = ComposeChainKeyframes(parentChain);
+                        if (swapAnimated)
+                        {
+                            // Shallow-copy so downstream mutation of the
+                            // returned list can't scramble the reader's
+                            // internal ShapeNode state.
+                            for (int i = 0; i < shp.keyframes.Count; i++)
+                                anim.shapeKeyframes.Add(shp.keyframes[i]);
+                        }
+                        voxFile.animations.Add(anim);
+                    }
                 }
             }
             else if (node is GroupNode grp)
             {
                 foreach (int childId in grp.childrenIds)
                 {
-                    FindAndApplyToModel(childId, translation, nodeMap, voxFile);
+                    FindAndApplyToModel(childId, accumulatedPosition, accumulatedRotation, currentName, parentChain, nodeMap, voxFile);
                 }
             }
             else if (node is TransformNode nextTrn)
             {
-                FindAndApplyToModel(nextTrn.childId, translation + nextTrn.translation, nodeMap, voxFile);
+                // Standard SE(3) composition: child's local translation is
+                // rotated by the parent's world rotation before being added.
+                // Rotation composes on the right (world = parent * local).
+                Vector3 nextPos = accumulatedPosition + accumulatedRotation * (Vector3)nextTrn.translation;
+                Quaternion nextRot = accumulatedRotation * nextTrn.rotation;
+                string nextName = string.IsNullOrEmpty(nextTrn.name) ? currentName : nextTrn.name;
+                parentChain.Add(nextTrn);
+                FindAndApplyToModel(nextTrn.childId, nextPos, nextRot, nextName, parentChain, nodeMap, voxFile);
+                parentChain.RemoveAt(parentChain.Count - 1);
             }
+        }
+
+        /// <summary>
+        /// Compose the per-frame world transforms for a shape whose parent
+        /// nTRN chain contains at least one animated node. Algorithm:
+        /// <list type="number">
+        ///   <item>Union all frame indices across every animated nTRN in the chain (indices sorted, deduplicated).</item>
+        ///   <item>For each union frame index N, sample every nTRN's local (t, r) at frame N — lerp translation, slerp rotation between the node's own two adjacent keyframes (clamped at the endpoints).</item>
+        ///   <item>Compose bottom-up (standard SE(3)): <c>world_t = parent_R * local_t + parent_t; world_R = parent_R * local_R</c>.</item>
+        ///   <item>Emit one <see cref="TransformKeyframe"/> per union frame carrying (N, world_t, world_r).</item>
+        /// </list>
+        /// The composed stream is what the build tool and runtime playback
+        /// system consume directly — no further hierarchy walk needed downstream.
+        /// </summary>
+        private static List<TransformKeyframe> ComposeChainKeyframes(List<TransformNode> chain)
+        {
+            // Union frame indices — small set, use SortedSet.
+            SortedSet<int> unionFrames = new SortedSet<int>();
+            for (int i = 0; i < chain.Count; i++)
+            {
+                var kfs = chain[i].keyframes;
+                for (int k = 0; k < kfs.Count; k++)
+                    unionFrames.Add(kfs[k].frameIndex);
+            }
+
+            var result = new List<TransformKeyframe>(unionFrames.Count);
+            foreach (int N in unionFrames)
+            {
+                Vector3 worldT = Vector3.zero;
+                Quaternion worldR = Quaternion.identity;
+                for (int i = 0; i < chain.Count; i++)
+                {
+                    SampleLocalAtFrame(chain[i], N, out Vector3 localT, out Quaternion localR);
+                    worldT += worldR * localT;
+                    worldR = worldR * localR;
+                }
+                result.Add(new TransformKeyframe
+                {
+                    frameIndex  = N,
+                    translation = new Vector3Int(
+                        Mathf.RoundToInt(worldT.x),
+                        Mathf.RoundToInt(worldT.y),
+                        Mathf.RoundToInt(worldT.z)),
+                    rotation    = worldR,
+                });
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Linearly interpolate an nTRN's local transform at an arbitrary
+        /// frame index within its own keyframe list. Endpoints are clamped —
+        /// frames before the first keyframe use the first, frames after the
+        /// last use the last. Single-frame nTRNs (static nodes) always
+        /// return their sole keyframe's values regardless of <paramref name="frame"/>.
+        /// </summary>
+        private static void SampleLocalAtFrame(TransformNode node, int frame, out Vector3 t, out Quaternion r)
+        {
+            var kfs = node.keyframes;
+            if (kfs == null || kfs.Count == 0)
+            {
+                t = (Vector3)node.translation;
+                r = node.rotation;
+                return;
+            }
+            if (kfs.Count == 1 || frame <= kfs[0].frameIndex)
+            {
+                t = (Vector3)kfs[0].translation;
+                r = kfs[0].rotation;
+                return;
+            }
+            if (frame >= kfs[kfs.Count - 1].frameIndex)
+            {
+                var last = kfs[kfs.Count - 1];
+                t = (Vector3)last.translation;
+                r = last.rotation;
+                return;
+            }
+            // Find the two adjacent keyframes bracketing `frame`.
+            for (int i = 0; i < kfs.Count - 1; i++)
+            {
+                var a = kfs[i];
+                var b = kfs[i + 1];
+                if (frame >= a.frameIndex && frame <= b.frameIndex)
+                {
+                    float span = Mathf.Max(1, b.frameIndex - a.frameIndex);
+                    float u    = (frame - a.frameIndex) / span;
+                    t = Vector3.Lerp((Vector3)a.translation, (Vector3)b.translation, u);
+                    r = Quaternion.Slerp(a.rotation, b.rotation, u);
+                    return;
+                }
+            }
+            // Unreachable given the clamps above, but keep the compiler happy.
+            t = (Vector3)node.translation;
+            r = node.rotation;
         }
 
         private static AdvanceColor[] GetDefaultPalette()
