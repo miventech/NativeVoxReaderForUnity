@@ -1,6 +1,6 @@
 using UnityEngine;
 using Miventech.NativeVoxReader.Data;
-using Miventech.NativeVoxReader.Tools;
+using Miventech.NativeVoxReader.VoxRenderer;
 using System;
 using System.Linq;
 
@@ -11,7 +11,7 @@ namespace Miventech.NativeVoxReader.VoxRenderer.Types
     /// </summary>
     public abstract class VoxRenderAbstract : MonoBehaviour
     {
-        public abstract string RenderMethodName {get;}
+        public abstract string RenderMethodName { get; }
         public abstract System.Type SettingsType { get; }
 
         /// <summary>
@@ -69,6 +69,6 @@ namespace Miventech.NativeVoxReader.VoxRenderer.Types
                 .ToArray();
 
             return _cachedRenderTypes;
-        } 
+        }
     }
 }

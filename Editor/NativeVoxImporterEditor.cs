@@ -3,7 +3,7 @@ using System.Text;
 using UnityEditor;
 using UnityEditor.AssetImporters;
 using Miventech.NativeVoxReader.VoxRenderer.Types;
-using Miventech.NativeVoxReader.Tools;
+using Miventech.NativeVoxReader.VoxRenderer;
 using Miventech.NativeVoxReader.Data;
 using System.Linq;
 using UnityEngine;
@@ -34,7 +34,7 @@ namespace Miventech.NativeVoxReader.Editor
             var importer = (NativeVoxImporter)target;
             if (importer != null && !string.IsNullOrEmpty(importer.assetPath))
             {
-                var loadedVoxFile = new Miventech.NativeVoxReader.Runtime.Tools.ReaderFile.ReaderVoxFile().Read(importer.assetPath);
+                var loadedVoxFile = new Miventech.NativeVoxReader.Readers.ReaderVoxFile().Read(importer.assetPath);
                 if (loadedVoxFile != null && loadedVoxFile.palette != null)
                 {
                     _palette = loadedVoxFile.palette.ToColor32Array();

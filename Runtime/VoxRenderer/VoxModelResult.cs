@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Miventech.NativeVoxReader.Tools
+namespace Miventech.NativeVoxReader.VoxRenderer
 {
     public class VoxModelResult
     {

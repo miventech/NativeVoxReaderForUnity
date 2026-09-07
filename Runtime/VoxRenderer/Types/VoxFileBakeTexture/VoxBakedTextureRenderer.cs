@@ -1,6 +1,6 @@
 using UnityEngine;
 using Miventech.NativeVoxReader.Data;
-using Miventech.NativeVoxReader.Tools;
+using Miventech.NativeVoxReader.VoxRenderer;
 using Miventech.NativeVoxReader.Tools.VoxFileBakeTexture;
 
 namespace Miventech.NativeVoxReader.VoxRenderer.Types.VoxFileBakeTexture

@@ -1,12 +1,11 @@
 using UnityEngine;
 using UnityEditor.AssetImporters;
 using System.IO;
-using Miventech.NativeVoxReader.Tools.ReaderFile;
-using Miventech.NativeVoxReader.Tools;
 using Miventech.NativeVoxReader;
 using Miventech.NativeVoxReader.Data;
+using Miventech.NativeVoxReader.VoxRenderer;
 using Miventech.NativeVoxReader.Tools.VoxFileBakeTexture;
-using Miventech.NativeVoxReader.Runtime.Tools.ReaderFile;
+using Miventech.NativeVoxReader.Readers;
 
 
 namespace Miventech.NativeVoxReader.Editor
@@ -24,7 +23,7 @@ namespace Miventech.NativeVoxReader.Editor
         public override void OnImportAsset(AssetImportContext ctx)
         {
             // 1. Read the .vengi file data
-            VoxFile loadedVoxFile =new ReaderVengiFile().Read(ctx.assetPath);
+            VoxFile loadedVoxFile = new ReaderVengiFile().Read(ctx.assetPath);
             if (loadedVoxFile == null)
             {
                 Debug.LogError($"VengiImporter: Failed to read vengi file at {ctx.assetPath}");

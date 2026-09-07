@@ -1,12 +1,11 @@
 using UnityEngine;
 using UnityEditor.AssetImporters;
 using System.IO;
-using Miventech.NativeVoxReader.Tools.ReaderFile;
-using Miventech.NativeVoxReader.Tools;
 using Miventech.NativeVoxReader.Data;
+using Miventech.NativeVoxReader.VoxRenderer;
 using Miventech.NativeVoxReader.VoxRenderer.Types;
 using Miventech.NativeVoxReader.VoxRenderer.Types.VoxFileBakeTexture;
-using Miventech.NativeVoxReader.Runtime.Tools.ReaderFile;
+using Miventech.NativeVoxReader.Readers;
 
 namespace Miventech.NativeVoxReader.Editor
 {
@@ -61,13 +60,13 @@ namespace Miventech.NativeVoxReader.Editor
                 customPalette = (Color32[])palette.Clone();
                 palette = customPalette;
             }
-            
+
             // Ensure settings are valid and match the renderer
             if (settings == null || settings.GetType() != renderer.SettingsType)
             {
                 settings = (VoxRenderSettings)System.Activator.CreateInstance(renderer.SettingsType);
             }
-            
+
             renderer.SetSettings(settings);
             VoxModelResult[] results = renderer.Render(loadedVoxFile, palette);
 

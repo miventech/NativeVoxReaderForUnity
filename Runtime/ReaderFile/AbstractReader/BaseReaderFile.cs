@@ -2,14 +2,19 @@
 using System;
 using System.Linq;
 using Miventech.NativeVoxReader.Data;
-using Miventech.NativeVoxReader.Tools.ReaderFile.Data;
+using Miventech.NativeVoxReader.Readers.Data;
 using UnityEngine;
 
 
-namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
+namespace Miventech.NativeVoxReader.Readers
 {
     public abstract class BaseReaderFile
     {
+        /// <summary>
+        /// When true, readers emit verbose trace logs (per chunk, per palette color,
+        /// per property). Disabled by default so the end user's console stays clean.
+        /// </summary>
+        public static bool VerboseLogging = false;
         /// <summary>
         /// Checks if the file at the given path is valid for this reader.
         /// </summary>
@@ -21,7 +26,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
         private static BaseReaderFile[] CacheReaders;
         public static BaseReaderFile[] GetAllReaders()
         {
-            if(CacheReaders != null) return CacheReaders;
+            if (CacheReaders != null) return CacheReaders;
             var baseType = typeof(BaseReaderFile);
 
             CacheReaders = AppDomain.CurrentDomain.GetAssemblies()
@@ -29,7 +34,7 @@ namespace Miventech.NativeVoxReader.Runtime.Tools.ReaderFile
                 .Where(t => baseType.IsAssignableFrom(t) && !t.IsAbstract && t.GetConstructor(Type.EmptyTypes) != null)
                 .Select(t => (BaseReaderFile)Activator.CreateInstance(t))
                 .ToArray();
-                
+
             return CacheReaders;
         }
     }

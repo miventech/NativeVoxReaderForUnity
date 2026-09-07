@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Miventech.NativeVoxReader.Data;
 using UnityEngine;
 
-namespace Miventech.NativeVoxReader.Tools.ReaderFile.Data
+namespace Miventech.NativeVoxReader.Readers.Data
 {
     internal class TransformNode : VoxNode
     {

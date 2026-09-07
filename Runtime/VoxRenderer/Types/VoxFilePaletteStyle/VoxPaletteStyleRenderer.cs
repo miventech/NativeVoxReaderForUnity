@@ -1,6 +1,6 @@
 using UnityEngine;
 using Miventech.NativeVoxReader.Data;
-using Miventech.NativeVoxReader.Tools;
+using Miventech.NativeVoxReader.VoxRenderer;
 using Miventech.NativeVoxReader.Tools.VoxFilePaletteStyle;
 
 namespace Miventech.NativeVoxReader.VoxRenderer.Types.VoxFilePaletteStyle

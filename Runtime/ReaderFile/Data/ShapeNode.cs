@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Miventech.NativeVoxReader.Data;
 
-namespace Miventech.NativeVoxReader.Tools.ReaderFile.Data
+namespace Miventech.NativeVoxReader.Readers.Data
 {
     internal class ShapeNode : VoxNode
     {

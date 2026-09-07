@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Miventech.NativeVoxReader.Data;
-using Miventech.NativeVoxReader.Tools;
+using Miventech.NativeVoxReader.VoxRenderer;
 
 namespace Miventech.NativeVoxReader.Tools.VoxFilePaletteStyle
 {
@@ -10,7 +10,7 @@ namespace Miventech.NativeVoxReader.Tools.VoxFilePaletteStyle
         public static VoxModelResult[] Convert(VoxFile FileData, Color32[] palette, VoxFileToUnityPaletteStyleSetting settings = default)
         {
             if (settings == null) settings = new VoxFileToUnityPaletteStyleSetting();
-            
+
             var result = new VoxModelResult[FileData.models.Count];
             int index = 0;
             foreach (var voxModel in FileData.models)
@@ -33,12 +33,12 @@ namespace Miventech.NativeVoxReader.Tools.VoxFilePaletteStyle
 
             // 1. Generate Palette Texture
             Texture2D paletteTexture = GeneratePaletteTexture(palette);
-            
+
             // 2. Create Material
-            Material mat = new Material(GetDefaultShader()); 
+            Material mat = new Material(GetDefaultShader());
             mat.mainTexture = paletteTexture;
             mat.mainTexture.filterMode = FilterMode.Point;
-            
+
             // Adjust properties to be Matte
             if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0.0f);
             if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.0f);
@@ -63,7 +63,7 @@ namespace Miventech.NativeVoxReader.Tools.VoxFilePaletteStyle
             mesh.SetVertices(vertices);
             mesh.SetTriangles(triangles, 0);
             mesh.SetUVs(0, uvs);
-            
+
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
 
@@ -76,7 +76,7 @@ namespace Miventech.NativeVoxReader.Tools.VoxFilePaletteStyle
             if (UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline != null)
             {
                 string pipelineType = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline.GetType().ToString();
-                
+
                 if (pipelineType.Contains("Universal"))
                 {
                     return Shader.Find("Universal Render Pipeline/Lit");
@@ -95,7 +95,7 @@ namespace Miventech.NativeVoxReader.Tools.VoxFilePaletteStyle
             Texture2D tex = new Texture2D(256, 1, TextureFormat.RGBA32, false);
             tex.filterMode = FilterMode.Point;
             tex.wrapMode = TextureWrapMode.Clamp;
-            
+
             for (int i = 0; i < 256; i++)
             {
                 if (i < palette.Length)
@@ -111,10 +111,10 @@ namespace Miventech.NativeVoxReader.Tools.VoxFilePaletteStyle
         {
             Vector3Int size = model.size;
             int[,,] volume = new int[size.x, size.y, size.z];
-            
+
             foreach (var v in model.voxels)
             {
-                if(v.x < size.x && v.y < size.y && v.z < size.z)
+                if (v.x < size.x && v.y < size.y && v.z < size.z)
                     volume[v.x, v.y, v.z] = v.colorIndex;
             }
 
@@ -144,8 +144,8 @@ namespace Miventech.NativeVoxReader.Tools.VoxFilePaletteStyle
                                 int ny = x[1] + (d == 1 ? faceDir : 0);
                                 int nz = x[2] + (d == 2 ? faceDir : 0);
 
-                                if (nx >= 0 && nx < size.x && 
-                                    ny >= 0 && ny < size.y && 
+                                if (nx >= 0 && nx < size.x &&
+                                    ny >= 0 && ny < size.y &&
                                     nz >= 0 && nz < size.z)
                                 {
                                     cNeighbor = volume[nx, ny, nz];
@@ -187,8 +187,8 @@ namespace Miventech.NativeVoxReader.Tools.VoxFilePaletteStyle
                                     }
 
                                     int[] pos = new int[3];
-                                    pos[u] = i; 
-                                    pos[v] = j; 
+                                    pos[u] = i;
+                                    pos[v] = j;
                                     pos[d] = x[d];
 
                                     int depthOffset = (faceDir == 1) ? 1 : 0;
@@ -197,7 +197,7 @@ namespace Miventech.NativeVoxReader.Tools.VoxFilePaletteStyle
                                     int colorIndex = c - 1;
                                     if (colorIndex < 0) colorIndex = 0;
                                     if (colorIndex > 255) colorIndex = 255;
-                                    
+
                                     float uCoord = (colorIndex + 0.5f) / 256.0f;
                                     Vector2 uv = new Vector2(uCoord, 0.5f);
 
@@ -222,15 +222,15 @@ namespace Miventech.NativeVoxReader.Tools.VoxFilePaletteStyle
             }
         }
 
-        private static void AddGreedyQuad(int[] pos, int axisU, int axisV, int axisD, int width, int height, int faceDir, Vector2 uv, 
+        private static void AddGreedyQuad(int[] pos, int axisU, int axisV, int axisD, int width, int height, int faceDir, Vector2 uv,
                                    List<Vector3> verts, List<int> tris, List<Vector2> uvs)
         {
-            int[] p0 = new int[]{ pos[0], pos[1], pos[2] };
-            int[] p1 = new int[]{ pos[0], pos[1], pos[2] };
+            int[] p0 = new int[] { pos[0], pos[1], pos[2] };
+            int[] p1 = new int[] { pos[0], pos[1], pos[2] };
             p1[axisU] += width;
-            int[] p2 = new int[]{ pos[0], pos[1], pos[2] };
+            int[] p2 = new int[] { pos[0], pos[1], pos[2] };
             p2[axisV] += height;
-            int[] p3 = new int[]{ pos[0], pos[1], pos[2] };
+            int[] p3 = new int[] { pos[0], pos[1], pos[2] };
             p3[axisU] += width;
             p3[axisV] += height;
 
@@ -255,7 +255,7 @@ namespace Miventech.NativeVoxReader.Tools.VoxFilePaletteStyle
                 tris.Add(baseIndex);
                 tris.Add(baseIndex + 2);
                 tris.Add(baseIndex + 1);
-                
+
                 tris.Add(baseIndex + 1);
                 tris.Add(baseIndex + 2);
                 tris.Add(baseIndex + 3);
