@@ -41,6 +41,18 @@ Keep MagicaVoxel open, save your changes, and watch Unity update your models ins
 
 ---
 
+##  Credits
+
+Contributions to this project are welcome and appreciated. Thanks to everyone who helps improve Native Vox Reader!
+
+### Contributors
+
+*   **[aqscithe](https://github.com/alleriumlabs)** ([alleriumlabs/NativeVoxReader fork](https://github.com/alleriumlabs/NativeVoxReader)) — Contributions:
+    *   **Rotations & groups reading**: Improved `nTRN` node parsing so MagicaVoxel transformations (rotations and groups) are read correctly.
+    *   **Animation support**: Added `VoxAnimation` (Runtime/Data) with animation reading improvements.
+
+---
+
 ## 🚀 Upcoming Features (Roadmap)
 
 *   **🎬 Animation System**: We are currently developing a native voxel animation system to bring your characters to life directly within the tool.
